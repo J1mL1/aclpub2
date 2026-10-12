@@ -8,13 +8,77 @@
 # ---------------------------------------------------------------------------
 
 import argparse
-import openreview
+import getpass
 import os
+import sys
+
+import openreview
+import openreview.api
 import yaml
 from tqdm import tqdm
-import sys
-from util import *
-import openreview.api
+from util import (
+    collect_author_fallbacks,
+    collect_author_ids,
+    get_content_from,
+    get_decision_label,
+    get_user,
+)
+
+
+def _resolve_authors(submission, client, log_fh):
+    """Build author list: prefer profiles via IDs, else structured authors[] fallback."""
+    authorsids = collect_author_ids(submission)
+    authors = []
+    for authorsid in authorsids:
+        author, error = get_user(authorsid, client)
+        if error:
+            log_fh.write(
+                "Error at "
+                + str(authorsid)
+                + " from (#"
+                + str(submission.number)
+                + "; openreview ID: "
+                + submission.id
+                + ") "
+                + str(get_content_from(submission, "title"))
+                + "\n"
+            )
+        if author:
+            # Align with common aclpub2 examples.
+            if "emails" in author and "email" not in author and author["emails"]:
+                author["email"] = author["emails"]
+            if "username" in author and "openreview" not in author:
+                author["openreview"] = author["username"]
+            authors.append(author)
+
+    if authors:
+        return authors
+
+    fallbacks = collect_author_fallbacks(submission)
+    if fallbacks:
+        # If we have usernames in fallbacks, try profiles once more.
+        resolved = []
+        for fb in fallbacks:
+            uid = fb.get("username") or fb.get("openreview")
+            if uid and str(uid).startswith("~"):
+                author, error = get_user(uid, client)
+                if not error and author:
+                    if "emails" in author and "email" not in author and author["emails"]:
+                        author["email"] = author["emails"]
+                    if "username" in author and "openreview" not in author:
+                        author["openreview"] = author["username"]
+                    resolved.append(author)
+                    continue
+            resolved.append(fb)
+        msg = (
+            f"Paper #{submission.number} ({submission.id}): "
+            f"used authors[] fallback (authorids missing/hidden or profile lookup failed).\n"
+        )
+        print(msg.strip())
+        log_fh.write(msg)
+        return resolved
+
+    return []
 
 
 def main(username, password, venue, download_all, download_pdfs):
@@ -24,17 +88,17 @@ def main(username, password, venue, download_all, download_pdfs):
         )
     except Exception as e:
         print(f"OpenReview connection refused\n{e}")
-        exit()
+        sys.exit(1)
 
     try:
         client_acl_v2.get_group(venue)
     except Exception as e:
         print(f"Unable to get group for: {venue}\nSee below for the OpenReview API error")
         print(f"Exception: {e}")
-        exit()
+        sys.exit(1)
 
     if not download_all or not download_pdfs:
-        print("The output of this run cannot be used at ACLPUB2")
+        print("The output of this run cannot be used at ACLPUB2 (pass --all --pdfs).")
 
     attachment_types = {"software": "software", "data": "data", "copyright_PDF": "copyright"}
 
@@ -45,20 +109,27 @@ def main(username, password, venue, download_all, download_pdfs):
     if not os.path.exists(attachments_folder):
         os.mkdir(attachments_folder)
 
-    submissions = client_acl_v2.get_all_notes(content={ 'venueid': venue}, details='replies')
+    submissions = client_acl_v2.get_all_notes(content={"venueid": venue}, details="replies")
     if len(submissions) <= 0:
-        print("No submissions found. Please double check your venue ID and/or permissions to view the submissions")
+        print(
+            "No submissions found. Please double check your venue ID and/or permissions "
+            "to view the submissions (Accepted Submission Release may not have run yet)."
+        )
+        sys.exit(1)
 
     ## Publication chairs do not have access to the forum replies - use venueid instead
-    if len(submissions[0].details["replies"]) <= 0:
+    if not submissions[0].details or len(submissions[0].details.get("replies") or []) <= 0:
         decision_by_forum = {
             s.forum: s
-            for s in submissions if s.content["venueid"]["value"] == venue
+            for s in submissions
+            if s.content.get("venueid", {}).get("value") == venue
         }
     else:
         decision_by_forum = {
             r["forum"]: r
-            for s in submissions for r in s.details["replies"] if any(i.endswith("Decision") for i in r["invitations"])
+            for s in submissions
+            for r in s.details["replies"]
+            if any(i.endswith("Decision") for i in r["invitations"])
             if "accept" in r["content"]["decision"]["value"].lower()
         }
 
@@ -68,25 +139,15 @@ def main(username, password, venue, download_all, download_pdfs):
     for submission in tqdm(submissions):
         if submission.id not in decision_by_forum:
             continue
-        authorsids = get_content_from(submission, "authorids")
-        authors = []
-        for authorsid in authorsids:
-            author, error = get_user(authorsid, client_acl_v2)
-            if error:
-                small_log.write(
-                    "Error at "
-                    + authorsid
-                    + " from (#"
-                    + str(submission.number)
-                    + "; openreview ID: "
-                    + submission.id
-                    + ") "
-                    + get_content_from(submission, "title")
-                    + "\n"
-                )
-            if author:
-                authors.append(author)
-        assert len(authors) > 0
+
+        authors = _resolve_authors(submission, client_acl_v2, small_log)
+        if len(authors) == 0:
+            raise AssertionError(
+                f"Paper #{submission.number} ({submission.id}) "
+                f"'{get_content_from(submission, 'title')}' has no readable "
+                f"authorids/authors. Release author identities in "
+                f"Accepted Submission Release, or fill authors manually."
+            )
 
         if "abstract" in submission.content:
             abstract = get_content_from(submission, "abstract")
@@ -94,26 +155,35 @@ def main(username, password, venue, download_all, download_pdfs):
             abstract = ""
             if not abstract_flag:
                 abstract_flag = True
-                print(f"Paper {submission.id} abstract field is not present. Contact info@openreview.net if you need this information migrated from ARR")
+                print(
+                    f"Paper {submission.id} abstract field is not present. "
+                    f"Contact info@openreview.net if you need this information migrated from ARR"
+                )
 
+        decision_note = decision_by_forum.get(submission.id)
+        # When decision_by_forum stores the submission itself (no replies), skip note parsing.
+        if decision_note is submission:
+            decision_note = None
+
+        pdf_path = get_content_from(submission, "pdf") or ""
         paper = {
-            "id": submission.number,  # len(papers)+1,
+            "id": submission.number,
             "title": get_content_from(submission, "title"),
             "authors": authors,
             "abstract": abstract,
-            "file": str(submission.number) + ".pdf",  # str(len(papers)+1) + ".pdf",
-            "pdf_file": get_content_from(submission, "pdf").split("/")[-1],
-            "decision": get_decision_from_venueid(submission),
+            "file": str(submission.number) + ".pdf",
+            "pdf_file": str(pdf_path).split("/")[-1] if pdf_path else "",
+            "decision": get_decision_label(submission, decision_note),
             "openreview_id": submission.id,
         }
 
-        # Fetch paper attributes and attachments.
-        submitted_area = (
-            get_content_from(submission, "track")
-        )
+        submitted_area = get_content_from(submission, "track")
         if "track" not in submission.content and not track_flag:
             track_flag = True
-            print(f"Paper {submission.id} track field is not present. Contact info@openreview.net if you need this information migrated from ARR")
+            print(
+                f"Paper {submission.id} track field is not present. "
+                f"Contact info@openreview.net if you need this information migrated from ARR"
+            )
 
         if "paper_type" in submission.content:
             paper_type = " ".join(get_content_from(submission, "paper_type").split()[:2]).lower()
@@ -121,7 +191,10 @@ def main(username, password, venue, download_all, download_pdfs):
             paper_type = "N/A"
             if not paper_type_flag:
                 paper_type_flag = True
-                print("paper_type field (long or short) is not present. Contact info@openreview.net if you need this information migrated from ARR")
+                print(
+                    "paper_type field (long or short) is not present. "
+                    "Contact info@openreview.net if you need this information migrated from ARR"
+                )
         presentation_type = "N/A"
         paper["attributes"] = {
             "submitted_area": submitted_area,
@@ -143,7 +216,8 @@ def main(username, password, venue, download_all, download_pdfs):
                 attachments.append(
                     {
                         "type": attachment_types[att_type],
-                        "file": str(paper["id"]) + suffix
+                        "file": str(paper["id"])
+                        + suffix
                         + "."
                         + str(get_content_from(submission, att_type).split(".")[-1]),
                         "open_review_id": str(get_content_from(submission, att_type)),
@@ -167,7 +241,7 @@ def main(username, password, venue, download_all, download_pdfs):
                     os.path.join(papers_folder, str(paper["id"]) + ".pdf"), "wb"
                 ) as op:
                     op.write(f)
-            except:
+            except Exception:
                 print(f"Unable to download PDF for {paper['openreview_id']}")
 
         if len(attachments) > 0:
@@ -178,24 +252,29 @@ def main(username, password, venue, download_all, download_pdfs):
     small_log.close()
 
     papers.sort(key=lambda p: p["id"])
-    yaml.dump(papers, open("papers.yml", "w"), allow_unicode=True)
+    with open("papers.yml", "w", encoding="utf-8") as out:
+        yaml.dump(papers, out, allow_unicode=True)
+    print(f"Wrote {len(papers)} papers to papers.yml")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Fetch papers from an OpenReview venue."
+        description="Fetch papers from an OpenReview venue. Password is always read via getpass."
     )
-    parser.add_argument("username", type=str, help="OpenReview username.")
-    parser.add_argument("password", type=str, help="OpenReview password.")
     parser.add_argument(
-        "venue",
-        type=str,
-        help="OpenReview venue ID, found in the URL https://openreview.net/group?id=<VENUE ID>",
+        "-u",
+        "--username",
+        help="OpenReview email (prompted if omitted).",
+    )
+    parser.add_argument(
+        "-v",
+        "--venue",
+        help="OpenReview venue ID, found in https://openreview.net/group?id=<VENUE ID>",
     )
     parser.add_argument(
         "--all",
         action="store_true",
-        help="If set, downloads all papers in the OpenReview venue.",
+        help="If set, downloads all attachments in the OpenReview venue.",
     )
     parser.add_argument(
         "--pdfs",
@@ -203,4 +282,12 @@ if __name__ == "__main__":
         help="If set, downloads PDFs.",
     )
     args = parser.parse_args()
-    main(args.username, args.password, args.venue, args.all, args.pdfs)
+
+    username = (args.username or input("OpenReview email: ")).strip()
+    password = getpass.getpass("OpenReview password: ")
+    venue = (args.venue or input("Venue ID: ")).strip()
+    if not venue:
+        print("Venue ID is required.", file=sys.stderr)
+        sys.exit(1)
+
+    main(username, password, venue, args.all, args.pdfs)

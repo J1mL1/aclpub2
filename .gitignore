@@ -11,3 +11,9 @@
 .idea/modules.xml
 .vscode
 venv
+
+# Generated OpenReview exports (workshop-specific; keep out of tool repo)
+openreview/papers.yml
+openreview/papers/
+openreview/attachments/
+openreview/papers.log

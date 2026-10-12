@@ -279,7 +279,7 @@ When running your workshop on OpenReview, it is possible to use their API for au
 
 2. `or2program_committee.py`: it creates the `program_committee.yml` file by retrieving the *Senior Area Chairs* list registered at workshop spate on OpenReview and the list of reviewers;
   
-Those scripts are designed to be used by the workshop's Program Chairs due to access permission required during the queries to OpenReview. To use these scripts, you will need **username** (the e-mails used for login onto OpenReview), **password** (the password associated with the user's account), and the **workshop_ID** (the OpenReview identifier linked to the workshop).
+Those scripts are designed to be used by the workshop's Program Chairs due to access permission required during the queries to OpenReview. You will need an OpenReview account and the **workshop / venue ID**. Passwords are **never** accepted on the command line; they are always prompted securely via `getpass`.
 
 **Workshop ID**: you can find out the workshop's identifier by following one of the two approaches below:
 1. Workshop ID is identified as "venue ID" on the setup website.
@@ -299,32 +299,29 @@ This script will find the intersection of all blind submissions and the submissi
 For running `or2papers.py` type:
 
 ```
-python or2papers.py USER PASSWORD WORKSHOP_ID
+python or2papers.py -u USER -v WORKSHOP_ID --all --pdfs
 ```
 For example: 
 
 ```
-python or2papers.py myuser@acl.com 123456 aclweb.org/ACL/2022/Conference
+python or2papers.py -u myuser@acl.com -v aclweb.org/ACL/2022/Conference --all --pdfs
 ```
 
-The above command will complain that `The output of this run cannot be used at ACLPUB2`. There are two additional parameters that will ensure that the PDFs will be downloaded, namely `--all` and `--pdfs`, so you should run
-
-```
-python or2papers.py myuser@acl.com 123456 aclweb.org/ACL/2022/Conference --all --pdfs
-```
+You will be prompted for the OpenReview password. Omit `-u` / `-v` to be prompted for email and venue as well. Without `--all --pdfs`, the script will warn that the output cannot be used at ACLPUB2.
 
 ### or2program_committee.py
 This script searches all Senior_Area_Chairs and Program_Chairs under your conference and saves their information in the `program_committee.yml` file.
 
-For running `or2papers.py` type:
+For running `or2program_committee.py` type:
   
 ```
-python or2program_committee.py USER PASSWORD WORKSHOP_ID
+python or2program_committee.py -u USER -v WORKSHOP_ID
 ```
 For example: 
 ```
-python or2program_committee.py myuser@acl.com 123456 aclweb.org/ACL/2022/Conference
+python or2program_committee.py -u myuser@acl.com -v aclweb.org/ACL/2022/Conference
 ```
+You will be prompted for the OpenReview password.
 ### :warning: Warnings
 1. The workshops that accepts the ARR commitment should be aware that the `or2program_committee.py` script only extracts data of submitted/committed papers.
 
