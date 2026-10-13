@@ -1,0 +1,20 @@
+# Sample schedule only. Leave timestamps unquoted so PyYAML reads datetimes.
+# This file adds a program to the proceedings; it is not a full handbook setup.
+- title: Opening Remarks
+  start_time: 2026-11-09 09:00:00
+  end_time: 2026-11-09 09:15:00
+- title: Paper Session
+  start_time: 2026-11-09 09:15:00
+  end_time: 2026-11-09 10:15:00
+  subsessions:
+    - title: Multimodal and Multilingual Language Learning
+      start_time: 2026-11-09 09:15:00
+      end_time: 2026-11-09 10:15:00
+      papers:
+        - id: 1
+        - id: 20
+# Non-archival presentations can be listed as standalone sessions; they have
+# no proceedings page number for the paper links used by the current template.
+- title: "A Sample Non-archival Presentation (Carol Lin)"
+  start_time: 2026-11-09 10:15:00
+  end_time: 2026-11-09 10:30:00

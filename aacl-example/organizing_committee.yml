@@ -1,0 +1,8 @@
+- role: Workshop Organizers
+  members:
+    - first_name: Alice
+      last_name: Zhang
+      institution: Example University
+    - first_name: Bob
+      last_name: Lee
+      institution: Example Institute

@@ -1,0 +1,46 @@
+# Fictional papers. IDs are unique across all submission sources.
+# List archival papers in the order they should appear in the proceedings.
+- id: 1
+  title: A Sample Paper on Multimodal Language Learning
+  abstract: A fictional paper used to demonstrate a direct workshop submission.
+  authors:
+    - first_name: Alice
+      last_name: Zhang
+      institution: Example University
+      email: alice@example.org
+  file: 1.pdf
+  archival: true
+  attributes:
+    submission_source: direct_or_shared_task
+    openreview_number: 1
+    paper_type: short
+    presentation_type: oral
+
+- id: 20
+  title: A Sample Paper on Multilingual Feedback
+  abstract: A fictional paper used to demonstrate an ARR commitment merged into the same volume.
+  authors:
+    - first_name: Bob
+      last_name: Lee
+      institution: Example Institute
+      email: bob@example.org
+  file: 20.pdf
+  archival: true
+  attributes:
+    submission_source: arr_commitment
+    openreview_number: 1  # The original venue's number; the merged ID is 20.
+    paper_type: short
+    presentation_type: oral
+
+- id: 3
+  title: A Sample Non-archival Presentation
+  abstract: A fictional presentation that is excluded from the proceedings papers and author index.
+  authors:
+    - first_name: Carol
+      last_name: Lin
+      institution: Example University
+  archival: false
+  attributes:
+    submission_source: direct_or_shared_task
+    openreview_number: 3
+    presentation_type: oral
