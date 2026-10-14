@@ -1,0 +1,13 @@
+# Demonstration data, not an actual invited talk.
+# File paths are relative to invited_talks/.
+- speaker_name: Dana Chen
+  institution: Example University
+  title: "Multilingual NLP Beyond High-Resource Languages"
+  abstract_file: dana_chen_abstract.tex
+  bio_file: dana_chen_bio.tex
+  date: "Monday, November 9, 2026"
+  time: "10:30 -- 11:30"
+  location: Room A
+  custom_prefix: Invited Talk
+  # Optional: add a speaker photo to invited_talks/ and uncomment this field.
+  # photo: dana_chen_photo.jpg

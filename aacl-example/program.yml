@@ -18,3 +18,7 @@
 - title: "A Sample Non-archival Presentation (Carol Lin)"
   start_time: 2026-11-09 10:15:00
   end_time: 2026-11-09 10:30:00
+# Invited talk details, abstract, and biography are in invited_talks.yml.
+- title: "Invited Talk: Multilingual NLP Beyond High-Resource Languages (Dana Chen)"
+  start_time: 2026-11-09 10:30:00
+  end_time: 2026-11-09 11:30:00
